@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GS1 Barcode Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bwip-js/4.10.0/bwip-js-min.js"></script>
+<style>
+  :root {
+    --bg: #f6f5f2;
+    --panel: #ffffff;
+    --border: #dcd9d1;
+    --border-strong: #b8b4a9;
+    --text: #1c1a16;
+    --text-secondary: #6b6558;
+    --text-muted: #948e7f;
+    --accent: #b5502e;
+    --accent-bg: #f7e9e2;
+    --ok: #2f6e4e;
+    --ok-bg: #e7f2ea;
+    --err: #a5311f;
+    --err-bg: #fbeae6;
+    --mono: "SF Mono", "Consolas", "Menlo", monospace;
+    --sans: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 32px 24px 64px;
+  }
+  header {
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px;
+  }
+  header h1 {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  header p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin: 0;
+    max-width: 640px;
+    line-height: 1.5;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .panel + .panel { margin-top: 20px; }
+  .panel h2 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    margin: 0 0 16px;
+  }
+  .ai-row {
+    display: grid;
+    grid-template-columns: 130px 1fr 28px;
+    gap: 8px;
+    align-items: start;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0eee8;
+  }
+  .ai-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  select, input[type=text] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: var(--mono);
+    background: #fff;
+    color: var(--text);
+  }
+  select { font-family: var(--sans); font-size: 12.5px; padding: 8px 6px; }
+  input[type=text]:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-bg);
+  }
+  .field-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 3px;
+    line-height: 1.4;
+  }
+  .field-error {
+    font-size: 11px;
+    color: var(--err);
+    margin-top: 3px;
+    line-height: 1.4;
+  }
+  .remove-btn {
+    width: 28px;
+    height: 34px;
+    border: 1px solid var(--border);
+    background: #fff;
+    border-radius: 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .remove-btn:hover { background: var(--err-bg); border-color: var(--err); color: var(--err); }
+  .add-row {
+    margin-top: 14px;
+    display: flex;
+    gap: 8px;
+  }
+  button {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 9px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border-strong);
+    background: #fff;
+    color: var(--text);
+    cursor: pointer;
+  }
+  button:hover { background: #f5f3ee; }
+  button.primary {
+    background: var(--text);
+    color: #fff;
+    border-color: var(--text);
+  }
+  button.primary:hover { background: #333; }
+  .symb-toggle {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .symb-toggle button {
+    flex: 1;
+    padding: 10px;
+  }
+  .symb-toggle button.active {
+    background: var(--text);
+    color: #fff;
+    border-color: var(--text);
+  }
+  .barcode-stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    min-height: 260px;
+  }
+  #canvas { image-rendering: pixelated; max-width: 100%; }
+  .placeholder {
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+  }
+  .data-string {
+    margin-top: 16px;
+    padding: 12px;
+    background: #faf9f6;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    word-break: break-all;
+    line-height: 1.6;
+    color: var(--text);
+  }
+  .data-string .ai { color: var(--accent); font-weight: 600; }
+  .status {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .status.ok { background: var(--ok-bg); color: var(--ok); }
+  .status.err { background: var(--err-bg); color: var(--err); }
+  .actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .actions button { flex: 1; }
+  .hint-box {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    background: #faf9f6;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    margin-top: 6px;
+  }
+  .hint-box code {
+    background: #efece4;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .footnote {
+    margin-top: 24px;
+    font-size: 11.5px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>GS1 barcode generator</h1>
+    <p>Builds a real GS1 element string with a true FNC1 flag and Group Separator bytes — not literal placeholder text — for GS1 QR Code and GS1 DataMatrix. AI rules sourced from the official GS1 Barcode Syntax Dictionary.</p>
+  </header>
+
+  <div class="panel" style="margin-bottom:20px;">
+    <h2>Input mode</h2>
+    <div class="symb-toggle" style="margin-bottom:0;">
+      <button id="mode-build" class="active">Build fields</button>
+      <button id="mode-paste">Paste code</button>
+      <button id="mode-auto">Auto-generate</button>
+    </div>
+
+    <div id="paste-panel" style="display:none; margin-top:16px;">
+      <textarea id="paste-input" rows="3" placeholder="(01)09506000134352(10)DEMO123(17)260427
+or a GS1 Digital Link URL, e.g. https://id.gs1.org/01/09506000134352/10/DEMO123?17=260427" style="width:100%; padding:10px; border:1px solid var(--border-strong); border-radius:6px; font-family:var(--mono); font-size:13px; resize:vertical;"></textarea>
+      <div class="add-row" style="margin-top:10px;">
+        <button class="primary" id="parse-btn">Parse into fields</button>
+      </div>
+      <div id="parse-status" style="margin-top:10px;"></div>
+    </div>
+
+    <div id="auto-panel" style="display:none; margin-top:16px;">
+      <p style="font-size:13px; color:var(--text-secondary); margin:0 0 12px;">Generates a random, check-digit-valid test code with GTIN, batch/lot, and expiry.</p>
+      <div class="add-row" style="margin-top:0;">
+        <button class="primary" id="auto-btn">Generate random code</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div>
+      <div class="panel">
+        <h2>Application identifiers</h2>
+        <div id="ai-list"></div>
+        <div class="add-row">
+          <button id="add-ai">+ Add AI</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Element string preview</h2>
+        <div class="data-string" id="data-preview">—</div>
+        <div id="validation-status"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h2>Symbology</h2>
+        <div class="symb-toggle">
+          <button id="symb-qr" class="active">GS1 QR Code</button>
+          <button id="symb-dm">GS1 DataMatrix</button>
+        </div>
+        <div class="barcode-stage">
+          <canvas id="canvas" width="300" height="300"></canvas>
+        </div>
+        <div class="actions">
+          <button class="primary" id="download-png">Download PNG</button>
+          <button id="download-svg">Download SVG</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Notes</h2>
+        <div class="hint-box">
+          Fixed-length AIs (e.g. <code>01</code>, <code>17</code>) need no separator.<br/><br/>
+          Variable-length AIs (e.g. <code>10</code>, <code>21</code>) get a real <code>GS</code> (0x1D) byte automatically inserted when another field follows — never typed as text.<br/><br/>
+          The symbol always starts with a true <code>FNC1</code> in the first position, marking it as GS1 data to the scanner.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footnote">
+    AI definitions and field rules derived from the GS1 Barcode Syntax Dictionary (gs1/gs1-syntax-dictionary, GS1 AISBL). For the authoritative, complete specification refer to the GS1 General Specifications and <a href="https://ref.gs1.org/ai/" target="_blank" style="color:inherit">ref.gs1.org/ai</a>.
+  </div>
+</div>
+
+<script>
+// ---- GS1 AI dictionary (subset of official syntax dictionary, most commonly used AIs) ----
+// type: N = numeric, X = CSET82 (alnum), fixed = exact length, max = variable up to length
+// checkDigit: true = last digit is a mod-10 check digit over the preceding digits
+const AI_DICT = {
+  "00": { title: "SSCC", type: "N", fixed: 18, checkDigit: true },
+  "01": { title: "GTIN", type: "N", fixed: 14, checkDigit: true },
+  "02": { title: "CONTENT (GTIN of contained items)", type: "N", fixed: 14, checkDigit: true },
+  "10": { title: "BATCH/LOT", type: "X", max: 20 },
+  "11": { title: "PROD DATE (YYMMDD)", type: "N", fixed: 6, isDate: true },
+  "12": { title: "DUE DATE (YYMMDD)", type: "N", fixed: 6, isDate: true },
+  "13": { title: "PACK DATE (YYMMDD)", type: "N", fixed: 6, isDate: true },
+  "15": { title: "BEST BEFORE (YYMMDD)", type: "N", fixed: 6, isDate: true },
+  "16": { title: "SELL BY (YYMMDD)", type: "N", fixed: 6, isDate: true },
+  "17": { title: "USE BY / EXPIRY (YYMMDD)", type: "N", fixed: 6, isDate: true },
+  "20": { title: "VARIANT", type: "N", fixed: 2 },
+  "21": { title: "SERIAL NUMBER", type: "X", max: 20 },
+  "22": { title: "CPV (consumer product variant)", type: "X", max: 20 },
+  "30": { title: "VAR. COUNT", type: "N", max: 8 },
+  "37": { title: "COUNT (of trade items)", type: "N", max: 8 },
+  "90": { title: "INTERNAL (mutually agreed)", type: "X", max: 30 },
+  "91": { title: "INTERNAL", type: "X", max: 90 },
+  "92": { title: "INTERNAL", type: "X", max: 90 },
+  "93": { title: "INTERNAL", type: "X", max: 90 },
+  "240": { title: "ADDITIONAL ID", type: "X", max: 30 },
+  "241": { title: "CUST. PART No.", type: "X", max: 30 },
+  "250": { title: "SECONDARY SERIAL", type: "X", max: 30 },
+  "251": { title: "REF. TO SOURCE", type: "X", max: 30 },
+  "254": { title: "GLN EXTENSION COMPONENT", type: "X", max: 20 },
+  "400": { title: "ORDER NUMBER", type: "X", max: 30 },
+  "401": { title: "GINC", type: "X", max: 30 },
+  "402": { title: "GSIN", type: "N", fixed: 17, checkDigit: true },
+  "410": { title: "SHIP TO LOC (GLN)", type: "N", fixed: 13, checkDigit: true },
+  "411": { title: "BILL TO (GLN)", type: "N", fixed: 13, checkDigit: true },
+  "412": { title: "PURCHASE FROM (GLN)", type: "N", fixed: 13, checkDigit: true },
+  "413": { title: "SHIP FOR LOC (GLN)", type: "N", fixed: 13, checkDigit: true },
+  "414": { title: "LOC No. (GLN)", type: "N", fixed: 13, checkDigit: true },
+  "415": { title: "PAY TO (GLN)", type: "N", fixed: 13, checkDigit: true },
+  "417": { title: "PARTY GLN", type: "N", fixed: 13, checkDigit: true },
+  "420": { title: "SHIP TO POST CODE", type: "X", max: 20 },
+  "421": { title: "SHIP TO POST CODE + ISO country", type: "X", max: 12 },
+  "422": { title: "ORIGIN COUNTRY (ISO)", type: "N", fixed: 3 },
+  "8003": { title: "GRAI", type: "X", max: 30 },
+  "8004": { title: "GIAI", type: "X", max: 30 },
+  "8005": { title: "PRICE PER UNIT", type: "N", fixed: 6 },
+  "8006": { title: "ITIP", type: "N", fixed: 18 },
+  "8007": { title: "IBAN", type: "X", max: 34 },
+  "8008": { title: "PROD TIME", type: "N", max: 12 },
+  "8010": { title: "CPID", type: "X", max: 30 },
+  "8011": { title: "CPID SERIAL", type: "N", max: 12 },
+  "8012": { title: "VERSION", type: "X", max: 20 },
+  "8013": { title: "GMN", type: "X", max: 25 },
+  "8017": { title: "GSRN - PROVIDER", type: "N", fixed: 18, checkDigit: true },
+  "8018": { title: "GSRN - RECIPIENT", type: "N", fixed: 18, checkDigit: true },
+  "8019": { title: "SRIN", type: "N", max: 10 },
+  "8020": { title: "REF No.", type: "X", max: 25 },
+  "8110": { title: "COUPON CODE", type: "X", max: 70 },
+  "8111": { title: "POINTS", type: "N", fixed: 4 },
+  "8200": { title: "PRODUCT URL", type: "X", max: 70 }
+};
+
+const state = {
+  symbology: "qr",
+  rows: [
+    { ai: "01", value: "09506000134352" },
+    { ai: "10", value: "DEMO123" },
+    { ai: "17", value: "260427" }
+  ]
+};
+
+function gtinCheckDigit(base) {
+  let sum = 0;
+  const digits = base.split("").reverse();
+  for (let i = 0; i < digits.length; i++) {
+    sum += parseInt(digits[i], 10) * (i % 2 === 0 ? 3 : 1);
+  }
+  return (10 - (sum % 10)) % 10;
+}
+
+function validateRow(row) {
+  const def = AI_DICT[row.ai];
+  if (!def) return { ok: false, msg: "Unknown AI" };
+  const v = row.value || "";
+  if (!v) return { ok: false, msg: "Value required" };
+
+  if (def.type === "N" && !/^[0-9]*$/.test(v)) {
+    return { ok: false, msg: "Numeric only" };
+  }
+  if (def.fixed && v.length !== def.fixed) {
+    return { ok: false, msg: `Must be exactly ${def.fixed} digits` };
+  }
+  if (def.max && v.length > def.max) {
+    return { ok: false, msg: `Max length ${def.max}` };
+  }
+  if (def.checkDigit) {
+    const base = v.slice(0, -1);
+    const given = v.slice(-1);
+    const expected = gtinCheckDigit(base);
+    if (String(expected) !== given) {
+      return { ok: false, msg: `Check digit should be ${expected}, got ${given}` };
+    }
+  }
+  if (def.isDate) {
+    const mm = parseInt(v.slice(2, 4), 10);
+    const dd = parseInt(v.slice(4, 6), 10);
+    if (mm < 1 || mm > 12) return { ok: false, msg: "Invalid month in YYMMDD" };
+    if (dd > 31) return { ok: false, msg: "Invalid day in YYMMDD" };
+  }
+  return { ok: true };
+}
+
+function isFixedLength(ai) {
+  const def = AI_DICT[ai];
+  return def && !!def.fixed;
+}
+
+function buildElementString(rows) {
+  // Returns { human, raw, valid, errors }
+  const errors = [];
+  const parts = [];
+  rows.forEach((row, i) => {
+    const v = validateRow(row);
+    if (!v.ok) errors.push({ index: i, msg: v.msg });
+  });
+
+  // "human" is the bracketed AI syntax fed directly to bwip-js — it inserts
+  // the real FNC1 and GS (0x1D) bytes itself. No separator text is ever
+  // added here manually.
+  let human = "";
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const val = row.value || "";
+    human += `(${row.ai})${val}`;
+  }
+  return { human, errors };
+}
+
+function renderRows() {
+  const list = document.getElementById("ai-list");
+  list.innerHTML = "";
+  state.rows.forEach((row, idx) => {
+    const def = AI_DICT[row.ai];
+    const v = validateRow(row);
+
+    const rowEl = document.createElement("div");
+    rowEl.className = "ai-row";
+
+    const select = document.createElement("select");
+    Object.keys(AI_DICT).forEach(ai => {
+      const opt = document.createElement("option");
+      opt.value = ai;
+      opt.textContent = `(${ai}) ${AI_DICT[ai].title}`;
+      if (ai === row.ai) opt.selected = true;
+      select.appendChild(opt);
+    });
+    select.addEventListener("change", e => {
+      state.rows[idx].ai = e.target.value;
+      state.rows[idx].value = "";
+      renderRows();
+      update();
+    });
+
+    const inputWrap = document.createElement("div");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = row.value;
+    input.placeholder = def ? placeholderFor(row.ai) : "";
+
+    const meta = document.createElement("div");
+    function refreshMeta() {
+      const vv = validateRow(state.rows[idx]);
+      if (!vv.ok) {
+        meta.className = "field-error";
+        meta.textContent = vv.msg;
+      } else {
+        meta.className = "field-meta";
+        meta.textContent = fieldMetaFor(state.rows[idx].ai);
+      }
+    }
+    refreshMeta();
+
+    input.addEventListener("input", e => {
+      state.rows[idx].value = e.target.value;
+      refreshMeta();
+      update();
+    });
+
+    inputWrap.appendChild(input);
+    inputWrap.appendChild(meta);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "remove-btn";
+    removeBtn.textContent = "×";
+    removeBtn.title = "Remove";
+    removeBtn.addEventListener("click", () => {
+      state.rows.splice(idx, 1);
+      renderRows();
+      update();
+    });
+
+    rowEl.appendChild(select);
+    rowEl.appendChild(inputWrap);
+    rowEl.appendChild(removeBtn);
+    list.appendChild(rowEl);
+  });
+}
+
+function placeholderFor(ai) {
+  const def = AI_DICT[ai];
+  if (def.checkDigit) return "digits incl. check digit";
+  if (def.isDate) return "YYMMDD";
+  if (def.fixed) return `exactly ${def.fixed} chars`;
+  return `up to ${def.max} chars`;
+}
+
+function fieldMetaFor(ai) {
+  const def = AI_DICT[ai];
+  if (def.checkDigit) return `${def.fixed} digits, last digit is a mod-10 check digit (auto-validated)`;
+  if (def.isDate) return "Format YYMMDD, fixed length — no separator needed";
+  if (def.fixed) return `Fixed length ${def.fixed} — no separator needed`;
+  return `Variable length, up to ${def.max} — separator inserted automatically if not last field`;
+}
+
+function renderPreview(built) {
+  const el = document.getElementById("data-preview");
+  el.innerHTML = "";
+  let html = "";
+  state.rows.forEach((row, i) => {
+    const isLast = i === state.rows.length - 1;
+    const fixed = AI_DICT[row.ai] && AI_DICT[row.ai].fixed;
+    html += `<span class="ai">(${row.ai})</span>${escapeHtml(row.value || "")}`;
+    if (!fixed && !isLast) html += `<span style="color:#999">&lt;GS&gt;</span>`;
+  });
+  el.innerHTML = html || "—";
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function update() {
+  const built = buildElementString(state.rows);
+  renderPreview(built);
+
+  const statusEl = document.getElementById("validation-status");
+  if (built.errors.length > 0) {
+    statusEl.className = "status err";
+    statusEl.innerHTML = built.errors.map(e => `Row ${e.index + 1}: ${e.msg}`).join("<br/>");
+    clearCanvas();
+    return;
+  } else if (state.rows.length === 0) {
+    statusEl.className = "status err";
+    statusEl.textContent = "Add at least one AI field.";
+    clearCanvas();
+    return;
+  } else {
+    statusEl.className = "status ok";
+    statusEl.textContent = "Valid GS1 element string.";
+  }
+
+  drawBarcode(built.human);
+}
+
+function clearCanvas() {
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawBarcode(humanString) {
+  const canvas = document.getElementById("canvas");
+  try {
+    bwipjs.toCanvas(canvas, {
+      bcid: state.symbology === "qr" ? "gs1qrcode" : "gs1datamatrix",
+      text: humanString,
+      scale: 4,
+      includetext: false
+    });
+  } catch (e) {
+    const statusEl = document.getElementById("validation-status");
+    statusEl.className = "status err";
+    statusEl.textContent = "Encoding error: " + (e.message || e);
+    clearCanvas();
+  }
+}
+
+document.getElementById("add-ai").addEventListener("click", () => {
+  const used = new Set(state.rows.map(r => r.ai));
+  const next = Object.keys(AI_DICT).find(ai => !used.has(ai)) || Object.keys(AI_DICT)[0];
+  state.rows.push({ ai: next, value: "" });
+  renderRows();
+  update();
+});
+
+// ---- Mode switching ----
+function setMode(mode) {
+  document.getElementById("mode-build").classList.toggle("active", mode === "build");
+  document.getElementById("mode-paste").classList.toggle("active", mode === "paste");
+  document.getElementById("mode-auto").classList.toggle("active", mode === "auto");
+  document.getElementById("paste-panel").style.display = mode === "paste" ? "block" : "none";
+  document.getElementById("auto-panel").style.display = mode === "auto" ? "block" : "none";
+}
+document.getElementById("mode-build").addEventListener("click", () => setMode("build"));
+document.getElementById("mode-paste").addEventListener("click", () => setMode("paste"));
+document.getElementById("mode-auto").addEventListener("click", () => setMode("auto"));
+
+// ---- Parsing pasted codes ----
+// Sorted longest-first so e.g. "8200" is tried before "8" would ever be (not
+// applicable here since all keys are 2+ digits, but keeps behavior correct
+// if 1-digit AIs are ever added).
+const AI_KEYS_BY_LENGTH_DESC = Object.keys(AI_DICT).sort((a, b) => b.length - a.length);
+
+function parseBracketedAIString(str) {
+  // Matches (AI)value(AI)value... allowing FNC1/GS artifacts to be stripped first.
+  const rows = [];
+  const re = /\((\d{2,4})\)([^\(]*)/g;
+  let m;
+  let matched = false;
+  while ((m = re.exec(str)) !== null) {
+    matched = true;
+    const ai = m[1];
+    let val = m[2];
+    // Strip any stray separator characters a user might have pasted in by hand.
+    val = val.replace(/\x1D/g, "").replace(/<GS>/gi, "").replace(/<F1>/gi, "").trim();
+    rows.push({ ai, value: val });
+  }
+  return matched ? rows : null;
+}
+
+function parseDigitalLinkURL(str) {
+  let url;
+  try {
+    url = new URL(str);
+  } catch (e) {
+    return null;
+  }
+  const rows = [];
+  // Path segments: /01/09506000134352/10/DEMO123
+  const segments = url.pathname.split("/").filter(Boolean);
+  for (let i = 0; i < segments.length - 1; i += 2) {
+    const ai = segments[i];
+    const val = decodeURIComponent(segments[i + 1]);
+    if (/^\d{2,4}$/.test(ai)) rows.push({ ai, value: val });
+  }
+  // Query params: ?17=260427
+  url.searchParams.forEach((val, key) => {
+    if (/^\d{2,4}$/.test(key)) rows.push({ ai: key, value: decodeURIComponent(val) });
+  });
+  return rows.length > 0 ? rows : null;
+}
+
+function parsePastedInput(raw) {
+  const str = raw.trim();
+  if (!str) return { rows: null, error: "Paste a GS1 element string or Digital Link URL." };
+
+  let rows = null;
+  let sourceType = "";
+
+  if (/^https?:\/\//i.test(str)) {
+    rows = parseDigitalLinkURL(str);
+    sourceType = "GS1 Digital Link URL";
+  } else if (str.includes("(")) {
+    rows = parseBracketedAIString(str);
+    sourceType = "bracketed AI element string";
+  } else {
+    return {
+      rows: null,
+      error: "Couldn't recognize the format. Paste either bracketed AI syntax, e.g. (01)09506000134352(10)DEMO123(17)260427, or a GS1 Digital Link URL."
+    };
+  }
+
+  if (!rows || rows.length === 0) {
+    return { rows: null, error: `No recognizable AIs found in the ${sourceType}.` };
+  }
+
+  const unknown = rows.filter(r => !AI_DICT[r.ai]);
+  const known = rows.filter(r => AI_DICT[r.ai]);
+
+  if (known.length === 0) {
+    return { rows: null, error: `Found AI(s) ${unknown.map(r => r.ai).join(", ")} but none are in this tool's AI dictionary yet.` };
+  }
+
+  return { rows: known, unknown, sourceType };
+}
+
+document.getElementById("parse-btn").addEventListener("click", () => {
+  const raw = document.getElementById("paste-input").value;
+  const result = parsePastedInput(raw);
+  const statusEl = document.getElementById("parse-status");
+
+  if (result.error) {
+    statusEl.className = "status err";
+    statusEl.textContent = result.error;
+    return;
+  }
+
+  state.rows = result.rows;
+  renderRows();
+  update();
+
+  let msg = `Parsed ${result.rows.length} field(s) from ${result.sourceType}.`;
+  if (result.unknown && result.unknown.length > 0) {
+    msg += ` Skipped unrecognized AI(s): ${result.unknown.map(r => r.ai).join(", ")}.`;
+  }
+  statusEl.className = "status ok";
+  statusEl.textContent = msg;
+  setMode("build");
+});
+
+// ---- Auto-generate a random valid test code ----
+function randomDigits(n) {
+  let s = "";
+  for (let i = 0; i < n; i++) s += Math.floor(Math.random() * 10);
+  return s;
+}
+function randomAlnum(n) {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let s = "";
+  for (let i = 0; i < n; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+function randomFutureYYMMDD() {
+  const d = new Date();
+  d.setDate(d.getDate() + 30 + Math.floor(Math.random() * 300));
+  const yy = String(d.getFullYear()).slice(-2);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return yy + mm + dd;
+}
+
+document.getElementById("auto-btn").addEventListener("click", () => {
+  const base13 = randomDigits(13);
+  const cd = gtinCheckDigit(base13);
+  const gtin = base13 + cd;
+  const batch = randomAlnum(7);
+  const expiry = randomFutureYYMMDD();
+
+  state.rows = [
+    { ai: "01", value: gtin },
+    { ai: "10", value: batch },
+    { ai: "17", value: expiry }
+  ];
+  renderRows();
+  update();
+  setMode("build");
+});
+
+document.getElementById("symb-qr").addEventListener("click", () => {
+  state.symbology = "qr";
+  document.getElementById("symb-qr").classList.add("active");
+  document.getElementById("symb-dm").classList.remove("active");
+  update();
+});
+document.getElementById("symb-dm").addEventListener("click", () => {
+  state.symbology = "dm";
+  document.getElementById("symb-dm").classList.add("active");
+  document.getElementById("symb-qr").classList.remove("active");
+  update();
+});
+
+document.getElementById("download-png").addEventListener("click", () => {
+  const canvas = document.getElementById("canvas");
+  const link = document.createElement("a");
+  link.download = `gs1-${state.symbology}.png`;
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+});
+
+document.getElementById("download-svg").addEventListener("click", () => {
+  const built = buildElementString(state.rows);
+  if (built.errors.length > 0) return;
+  try {
+    const svg = bwipjs.toSVG({
+      bcid: state.symbology === "qr" ? "gs1qrcode" : "gs1datamatrix",
+      text: built.human,
+      scale: 4,
+      includetext: false
+    });
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.download = `gs1-${state.symbology}.svg`;
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert("SVG export error: " + (e.message || e));
+  }
+});
+
+renderRows();
+update();
+</script>
+</body>
+</html>
